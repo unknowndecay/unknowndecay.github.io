@@ -1,4 +1,5 @@
-const {Client, IntentsBitField} =require('discord.js');
+const {Client, IntentsBitField, ActivityType} =require('discord.js');
+const eventHandler = require('./handlers/eventHandler');
 
 require("dotenv").config();
 
@@ -13,8 +14,6 @@ const client = new Client({
     ]
 });
 
-client.on("ready", () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-});
+eventHandler(client);
 
 client.login(process.env.TOKEN);
