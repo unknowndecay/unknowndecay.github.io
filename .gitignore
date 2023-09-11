@@ -1,2 +1,15 @@
-.env
-config.json
+# directories
+.history/
+.vscode/
+node_modules/
+prisma/
+
+# files
+*.env*
+*.db*
+*.log
+user/config.yml
+user/**/*.*
+!user/**/.gitkeep
+!user/templates/*
+summary.md

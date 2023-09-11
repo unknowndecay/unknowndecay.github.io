@@ -1,117 +1,75 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits, ActivityType, EmbedBuilder } = require('discord.js');
+/**
+ * Discord Tickets
+ * Copyright (C) 2022 Isaac Saunders
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * @name discord-tickets/bot
+ * @description An open-source Discord bot for ticket management
+ * @copyright 2022 Isaac Saunders
+ * @license GNU-GPLv3
+ */
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildModeration,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildIntegrations,
-        GatewayIntentBits.MessageContent,
-    ],
+/* eslint-disable no-console */
+
+const pkg = require('../package.json');
+const banner = require('./lib/banner');
+console.log(banner(pkg.version)); // print big title
+
+const semver = require('semver');
+const { colours } = require('leeks.js');
+
+// check node version
+if (!semver.satisfies(process.versions.node, pkg.engines.node)) {
+	console.log('\x07' + colours.redBright(`Error: Your current Node.js version, ${process.versions.node}, does not meet the requirement "${pkg.engines.node}". Please update to version ${semver.minVersion(pkg.engines.node).version} or higher.`));
+	process.exit(1);
+}
+
+// this could be done first, but then there would be no banner :(
+process.env.NODE_ENV ??= 'production'; // make sure NODE_ENV is set
+require('./env').load(); // load and check environment variables
+
+const fs = require('fs');
+const YAML = require('yaml');
+const logger = require('./lib/logger');
+const Client = require('./client');
+const http = require('./http');
+
+if (!fs.existsSync('./user/config.yml')) {
+	const examplePath = './user/example.config.yml';
+	if (!fs.existsSync(examplePath)) {
+		console.log('\x07' + colours.redBright('The config file does not exist, and the example file is missing so cannot be copied from.'));
+		process.exit(1);
+	} else {
+		console.log('Creating config file...');
+		fs.copyFileSync(examplePath, './user/config.yml');
+		console.log(`Copied config to ${'./user/config.yml'}`);
+	}
+}
+
+const config = YAML.parse(fs.readFileSync('./user/config.yml', 'utf8'));
+const log = logger(config);
+
+process.on('uncaughtException', (error, origin) => {
+	log.notice(`Discord Tickets v${pkg.version} on Node.js ${process.version} (${process.platform})`);
+	log.warn(origin === 'uncaughtException' ? 'Uncaught exception' : 'Unhandled promise rejection' + ` (${error.name})`);
+	log.error(error);
 });
 
-const handledInteractions = new Set();
+process.on('warning', warning => log.warn(warning.stack));
 
-client.on('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-
-    client.user.setActivity('Store tickets', { type: ActivityType.Watching });
+const client = new Client(config, log);
+client.login().then(() => {
+	http(client);
 });
-
-client.once('ready', () => {
-    const commands = [
-        {
-            name: 'announce',
-            description: 'Send an announcement',
-            options: [
-                {
-                    name: 'channel',
-                    type: 7,
-                    description: 'Select a channel for the announcement',
-                    required: true,
-                },
-                {
-                    name: 'title',
-                    type: 3,
-                    description: 'Announcement title',
-                    required: true,
-                },
-                {
-                    name: 'content',
-                    type: 3,
-                    description: 'Announcement content',
-                    required: true,
-                },
-                {
-                    name: 'image',
-                    type: 3,
-                    description: 'URL of the image to attach to the announcement',
-                },
-            ],
-        },
-    ];
-
-    client.guilds.cache.forEach(async (guild) => {
-        try {
-            await guild.commands.set(commands);
-            console.log(`Slash commands registered in ${guild.name}`);
-        } catch (error) {
-            console.error(`Error registering slash commands in ${guild.name}:`, error);
-        }
-    });
-});
-
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isCommand()) return;
-
-    const { commandName, options, member } = interaction;
-    const adminRole = member.roles.cache.find((role) => role.name === 'admin');
-
-    if (commandName === 'announce') {
-        if (handledInteractions.has(interaction.id)) {
-            return;
-        }
-
-        handledInteractions.add(interaction.id);
-
-        if (!adminRole) {
-            await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
-            return;
-        }
-
-        const channelId = options.getChannel('channel').id;
-        const title = options.getString('title');
-        const content = options.getString('content');
-        const imageUrl = options.getString('image');
-
-        const channel = interaction.guild.channels.cache.get(channelId);
-
-        if (!channel) {
-            await interaction.reply({ content: 'Invalid channel specified.', ephemeral: true });
-            return;
-        }
-
-        const embed = new EmbedBuilder()
-            .setTitle(title)
-            .setDescription(content)
-            .setColor('#ff0000')
-            .setFooter({ text: `Sent on: ${new Date().toLocaleString()}` });
-
-        if (imageUrl) {
-            embed.setImage(imageUrl);
-        }
-
-        try {
-            await channel.send({ embeds: [embed] });
-
-            await interaction.reply({ content: 'Announcement sent successfully!', ephemeral: true });
-        } catch (error) {
-            console.error('Error sending announcement:', error);
-            await interaction.reply({ content: 'An error occurred while sending the announcement.', ephemeral: true });
-        }
-    }
-});
-
-client.login(process.env.TOKEN);
