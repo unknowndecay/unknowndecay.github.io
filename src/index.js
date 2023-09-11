@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, MessageFlags, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, ActivityType, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
     intents: [
@@ -16,6 +16,8 @@ const handledInteractions = new Set();
 
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
+
+    client.user.setActivity('Store tickets', { type: ActivityType.Watching });
 });
 
 client.once('ready', () => {
