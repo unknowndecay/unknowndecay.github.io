@@ -1,6 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
-const { EmbedBuilder } = require('discord.js'); 
+const { Client, GatewayIntentBits, MessageFlags, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
     intents: [
@@ -27,21 +26,26 @@ client.once('ready', () => {
             options: [
                 {
                     name: 'channel',
-                    type: 7, 
+                    type: 7,
                     description: 'Select a channel for the announcement',
                     required: true,
                 },
                 {
                     name: 'title',
-                    type: 3, 
+                    type: 3,
                     description: 'Announcement title',
                     required: true,
                 },
                 {
                     name: 'content',
-                    type: 3, 
+                    type: 3,
                     description: 'Announcement content',
                     required: true,
+                },
+                {
+                    name: 'image',
+                    type: 3,
+                    description: 'URL of the image to attach to the announcement',
                 },
             ],
         },
@@ -64,41 +68,46 @@ client.on('interactionCreate', async (interaction) => {
     const adminRole = member.roles.cache.find((role) => role.name === 'admin');
 
     if (commandName === 'announce') {
-
         if (handledInteractions.has(interaction.id)) {
             return;
         }
 
-        handledInteractions.add(interaction.id); 
+        handledInteractions.add(interaction.id);
 
         if (!adminRole) {
-            await interaction.reply('You do not have permission to use this command.');
+            await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
             return;
         }
 
         const channelId = options.getChannel('channel').id;
         const title = options.getString('title');
         const content = options.getString('content');
+        const imageUrl = options.getString('image');
 
         const channel = interaction.guild.channels.cache.get(channelId);
 
         if (!channel) {
-            await interaction.reply('Invalid channel specified.');
+            await interaction.reply({ content: 'Invalid channel specified.', ephemeral: true });
             return;
         }
 
         const embed = new EmbedBuilder()
             .setTitle(title)
             .setDescription(content)
-            .setColor('#ff0000') 
-            .setFooter({ text: `Sent on: ${new Date().toLocaleString()}` }); 
+            .setColor('#ff0000')
+            .setFooter({ text: `Sent on: ${new Date().toLocaleString()}` });
+
+        if (imageUrl) {
+            embed.setImage(imageUrl);
+        }
 
         try {
             await channel.send({ embeds: [embed] });
-            await interaction.reply('Announcement sent successfully!');
+
+            await interaction.reply({ content: 'Announcement sent successfully!', ephemeral: true });
         } catch (error) {
             console.error('Error sending announcement:', error);
-            await interaction.reply('An error occurred while sending the announcement.');
+            await interaction.reply({ content: 'An error occurred while sending the announcement.', ephemeral: true });
         }
     }
 });
